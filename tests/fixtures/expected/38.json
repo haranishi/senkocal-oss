@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "interview",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0038_1",
+      "kind": "interview",
+      "stage": null,
+      "company": "サンプル人材株式会社",
+      "media": "direct",
+      "start": "2026-03-12T14:00:00+09:00",
+      "end": "2026-03-12T15:00:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": null,
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

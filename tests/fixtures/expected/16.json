@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "change",
+  "stage": "2次",
+  "candidates": [
+    {
+      "id": "c_m0016_1",
+      "kind": "change",
+      "stage": "2次",
+      "company": "サンプル建設株式会社",
+      "media": "direct",
+      "start": "2026-03-13T15:00:00+09:00",
+      "end": "2026-03-13T16:00:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "本社 2F 応接室",
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

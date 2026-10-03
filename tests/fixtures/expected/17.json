@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "change",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0017_1",
+      "kind": "change",
+      "stage": null,
+      "company": "株式会社サンプル観光",
+      "media": "direct",
+      "start": null,
+      "end": null,
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": null,
+      "url": null,
+      "confidence": "low"
+    }
+  ]
+}

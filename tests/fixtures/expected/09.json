@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "es_deadline",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0009_1",
+      "kind": "es_deadline",
+      "stage": null,
+      "company": "サンプル銀行",
+      "media": "iweb",
+      "start": null,
+      "end": null,
+      "allDay": true,
+      "deadline": "2026-03-15T12:00:00+09:00",
+      "choices": [],
+      "location": null,
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

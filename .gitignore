@@ -1,0 +1,19 @@
+node_modules/
+.DS_Store
+test-results/
+playwright-report/
+dist/
+
+# 本人の実メール（較正用）は絶対に追跡しない。README だけ残す
+tests/fixtures/real/*
+!tests/fixtures/real/README.md
+.next/
+out/
+build/
+__pycache__/
+*.pyc
+.env
+.env.*
+.wrangler/
+coverage/
+*.log

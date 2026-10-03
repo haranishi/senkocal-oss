@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "interview",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0032_1",
+      "kind": "interview",
+      "stage": null,
+      "company": "株式会社サンプル電子",
+      "media": "direct",
+      "start": "2026-03-05T14:00:00+09:00",
+      "end": "2026-03-05T15:00:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "本社",
+      "url": null,
+      "confidence": "low"
+    }
+  ]
+}

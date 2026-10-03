@@ -1,0 +1,1777 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>選考カレンダー（仮）</title>
+    <!--
+      確認画面（docs/02 ③④⑤）。HtmlService のサンドボックスで動くので、
+      外部の CSS・JS・フォントを読まない単一ファイルにしてある。
+      台帳が正本なので、この画面は状態を持たず毎回 api_listCandidates() で読み直す。
+      ユーザー由来の文字列は必ず textContent で入れる（innerHTML を使わない）。
+
+      UI 採点 r1（.agent-harness/SCORE-r1.md）の反映で変えたところ:
+      - まとめ登録は「確度が高く、日時と企業名がそろっている候補」の 1 条件。対象を注記に並べ、
+        押した後は上部の帯から「まとめて取り消す」で戻せる（P1・P2）
+      - 二次操作は白抜きボタン（高さ 44・左右 padding 12・要素間 8 以上）。主ボタンは別の行（P3・P17）
+      - 確度は日時行のチップとして文言で出す（P11・P15）
+      - ノイズ・無視と登録済みは <details>。閉じているときは中身を描かない（P4・P5）
+      - 登録済みは最下部の区分に置く（P24）。error の文言は開発用語を出さない（P6・P7・P8）
+
+      UI 採点 r2（.agent-harness/SCORE-r2.md）の反映で変えたところ:
+      - 押せるものの高さは `min-height` と `padding＋line-height` の**両方**で 46px を満たす（TOP1）。
+        採点 r2 は「枠線ボタンが 34px」と読んだが、実測（Playwright の boundingBox・r2 のスクショの
+        画素＝88 device px）はどちらも 44px だった。読み違えの余地を消すために 46px に上げ、
+        E2E は全カードの全ボタンを boundingBox() で測る形にした
+      - 塗りつぶしはまとめ登録の 1 つだけ。個別の主操作はティール枠＋ティール文字（TOP2）
+      - 日時も締切も無い候補は「登録」を出さず「編集して日時を入れる」を主操作にする（TOP3）
+      - 種別チップは塗り薄グレー、確度チップは枠線＋記号（◎／◯／△）で系統を分ける（TOP5）
+
+      UI 採点 r3（.agent-harness/SCORE-r3.md）の反映で変えたところ:
+      - 変更・中止の連絡は日時行の下に理由を 1 行出し、主操作を「Gmail で確認する」にする（Q7）
+      - 必須（企業名）が欠けている間は「登録」を無効の見た目（`aria-disabled`）にする。
+        `disabled` にはしない＝押すと欠けている欄へ案内する動きは残す（Q1）
+      - 「✓ 登録済み」は日時の上の小ラベルに分け、日時は日付と時刻の 2 つに割って
+        時刻の途中で折り返さないようにする（Q12）
+      - 単体の登録・取り消しの結果も上部の帯で返し、登録直後は帯から「元に戻す」（Q5・Q6）
+      - error のヘッダー「いま取り込む」は empty と同じく隠す（Q18）
+    -->
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --surface: #ffffff;
+        --text: #14171c;
+        --muted: #5a6472;
+        /* 枠線は面との明度差 3:1 以上（UI 部品の輪郭・P27） */
+        --border: #7f8796;
+        --line: #e2e6ec;
+        --fold: #eceff3;
+        --chip-border: #c3cad4;
+        --accent: #0f766e;
+        --accent-text: #ffffff;
+        --accent-weak: #e6f2f1;
+        /* フォーカスリングはボタンの枠より 1 段濃い色にする（枠が太くなったように見せない・採点 r3 Q22） */
+        --focus: #0b4f4a;
+        --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+        --radius: 10px;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1217;
+          --surface: #171b22;
+          --text: #e8ebf0;
+          --muted: #9aa4b2;
+          --border: #6b7280;
+          --line: #262c36;
+          --fold: #1c222b;
+          --chip-border: #3a424f;
+          --accent: #5eead4;
+          --accent-text: #0f1217;
+          --accent-weak: #17302e;
+          --focus: #ccfbf1;
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-text-size-adjust: 100%;
+      }
+      .wrap {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 0 16px;
+      }
+      /* ---- ヘッダー ---- */
+      .app-head {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .app-head .wrap {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px 12px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .app-name {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: 0.01em;
+        flex: 1 1 auto;
+      }
+      /* 狭い画面では「製品名＋いま取り込む」を 1 行目、最終取り込みを 2 行目にする */
+      #import-now {
+        order: 2;
+      }
+      .last-run {
+        color: var(--muted);
+        font-size: 13px;
+        margin: 0;
+        order: 3;
+        flex: 1 1 100%;
+        min-width: 0;
+      }
+      /* ---- ボタン ---- */
+      /*
+       * 押せるものの高さは 44px 以上（NFR-06・P3・採点 r2 TOP1）。
+       * `min-height` だけに頼らず、`line-height 22px＋上下 padding 11px＋枠 2px = 46px` で
+       * 中身の高さ自体が 44 を超えるようにしてある（どちらか一方が効かなくても 44 を割らない）。
+       */
+      .btn,
+      .btn-strong,
+      .btn-quiet,
+      .link {
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 22px;
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 11px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      /* 塗りつぶしは画面にひとつだけ（まとめ登録・空の状態・error の主操作）＝採点 r2 TOP2 */
+      .btn {
+        background: var(--accent);
+        color: var(--accent-text);
+        border: 1px solid var(--accent);
+        font-weight: 700;
+        padding: 11px 24px;
+        min-width: 120px;
+      }
+      .btn[disabled] {
+        opacity: 0.55;
+        cursor: default;
+      }
+      /* カードの主操作＝ティール枠＋ティール文字の強調白抜き（塗りはまとめ登録だけ・採点 r2 TOP2） */
+      .btn-strong {
+        background: var(--surface);
+        color: var(--accent);
+        border: 2px solid var(--accent);
+        font-weight: 700;
+        padding: 10px 22px;
+        min-width: 120px;
+      }
+      /*
+       * 無効表示は面を白のまま文字と枠を落とす（白地に白文字を作らない・採点 r2 Q16）。
+       * `aria-disabled` のほうは**押せるが今は登録できない**もの＝企業名が空の候補（採点 r3 Q1）。
+       * 押すと欠けている欄へ案内するので `disabled` にはせず、見た目だけ無効にそろえる。
+       */
+      .btn-strong[disabled],
+      .btn-strong[aria-disabled="true"] {
+        color: var(--muted);
+        border-color: var(--border);
+        font-weight: 600;
+      }
+      .btn-strong[disabled] {
+        cursor: default;
+      }
+      /* 二次操作＝白抜きボタン（文字リンクにしない） */
+      .btn-quiet {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+        font-weight: 600;
+      }
+      .btn-quiet[disabled] {
+        background: var(--fold);
+        color: var(--muted);
+        border-color: var(--border);
+        cursor: default;
+      }
+      /*
+       * 取り消しだけは戻せない操作なので、同じ枠のまま色を落として最後に置く（P23）。
+       * 行の右端へ寄せる＝2 行に割れても「取り消す」だけが左に残らない（採点 r3 Q13）。
+       */
+      .btn-undo {
+        color: var(--muted);
+        margin-left: auto;
+      }
+      .link {
+        background: none;
+        border: 1px solid transparent;
+        color: var(--accent);
+        padding: 11px 8px;
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      button:focus,
+      a:focus,
+      input:focus,
+      summary:focus,
+      [tabindex]:focus {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+      /* ---- 一覧の注記とまとめ行 ---- */
+      .list-note {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .bulk {
+        margin: 10px 0 0;
+        padding: 12px;
+        background: var(--accent-weak);
+        border: 1px solid var(--accent);
+        border-radius: var(--radius);
+      }
+      /* 主導線だけを塗りつぶしの幅いっぱいにする（個別の登録と主従を分ける・P26） */
+      .bulk .btn {
+        width: 100%;
+        font-size: 16px;
+      }
+      .bulk-note {
+        margin: 8px 0 0;
+        color: var(--text);
+        font-size: 13px;
+      }
+      .bulk-targets {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+      .banner {
+        margin: 14px 0 0;
+        padding: 10px 12px;
+        background: var(--accent-weak);
+        border: 1px solid var(--accent);
+        border-radius: var(--radius);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+      }
+      .banner p {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        flex: 1 1 auto;
+      }
+      /* ---- 区分 ---- */
+      .group {
+        margin: 24px 0 0;
+      }
+      .group-head {
+        font-size: 17px;
+        font-weight: 700;
+        margin: 0 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid var(--border);
+        color: var(--text);
+        letter-spacing: 0.02em;
+      }
+      .group-count {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .cards {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      /* ---- 折りたたみ（ノイズ・無視／登録済み） ---- */
+      .fold > summary {
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 22px;
+        font-weight: 700;
+        min-height: 46px;
+        padding: 11px 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--fold);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        list-style: none;
+      }
+      .fold > summary::-webkit-details-marker {
+        display: none;
+      }
+      .fold > summary::marker {
+        content: "";
+      }
+      /* 開閉できると分かる大きさにする（15px では記号の実寸が 5×8px しかなかった・採点 r3 Q21） */
+      .fold > summary::before {
+        content: "▸";
+        font-size: 22px;
+        line-height: 22px;
+        color: var(--muted);
+      }
+      .fold[open] > summary::before {
+        content: "▾";
+      }
+      .fold > .cards,
+      .fold > .noise-list {
+        margin-top: 10px;
+      }
+      .noise-list {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .noise-item {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .noise-subject {
+        flex: 1 1 200px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text);
+      }
+      .noise-from {
+        flex: 1 1 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* ---- カード ---- */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 14px;
+      }
+      .card[data-status="登録済み"] {
+        background: var(--accent-weak);
+      }
+      .card-when {
+        display: flex;
+        align-items: baseline;
+      }
+      /* 「✓ 登録済み」は日時の上の小ラベルに分ける＝390 で時刻の途中で折り返さない（採点 r3 Q12） */
+      .when-label {
+        margin: 0 0 2px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: 0.02em;
+      }
+      .when {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 23px;
+        line-height: 1.25;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        overflow-wrap: anywhere;
+      }
+      /* 日付と時刻はそれぞれの中では折り返さない（「11:00〜」で切れないようにする・採点 r3 Q12） */
+      .when > .nowrap {
+        white-space: nowrap;
+      }
+      .when-none {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      /* 締切の細目（時刻・入る形）。最大文字は日付のままにする（P9） */
+      .when-sub {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      /* 種別と確度は日時の下の 1 行にそろえる（幅で位置が変わらない・P11・P16） */
+      .card-chips {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin: 6px 0 0;
+      }
+      .chip {
+        font-size: 12px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--chip-border);
+        background: var(--bg);
+        color: var(--text);
+        white-space: nowrap;
+      }
+      /* 種別チップ＝塗り（薄グレー）・太字（採点 r2 TOP5） */
+      .chip-kind {
+        background: var(--fold);
+        border-color: transparent;
+      }
+      /* 確度チップ＝枠線のみ＋先頭の記号（◎／◯／△）。種別チップと系統を分ける（採点 r2 TOP5） */
+      .chip.confidence {
+        background: transparent;
+        border-color: var(--border);
+        color: var(--muted);
+        font-weight: 600;
+      }
+      /* 登録済みカードの面（淡ミント）にグレーのチップを乗せると穴のように浮く（採点 r3 Q20） */
+      .card[data-status="登録済み"] .chip-kind {
+        background: transparent;
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .company {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 6px 0 0;
+        overflow-wrap: anywhere;
+      }
+      .meta {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        min-width: 0;
+      }
+      .subject {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .place {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+      .hint {
+        margin: 4px 0 0;
+        color: var(--text);
+        font-size: 13px;
+      }
+      /*
+       * 変更・中止の連絡（採点 r3 Q7）。日時行のすぐ下に置き、面を付けて本文と見分ける。
+       * 色に意味を持たせない約束なので、赤ではなく枠と面で目立たせる（NFR-06）。
+       */
+      .note-change {
+        margin: 6px 0 0;
+        font-size: 13px;
+        color: var(--text);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 10px;
+      }
+      .choices-label {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      /* 候補日は選ぶものではないので、押せる見た目にしない（P18） */
+      .choices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        margin: 2px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .choices li {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 13px;
+        color: var(--text);
+      }
+      .actions {
+        margin: 10px 0 0;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .act-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      /* 広い画面でも主操作は二次操作より明らかに大きく（1440 で 120px は主従が弱い・採点 r3 Q14） */
+      .act-main > .btn-strong {
+        min-width: 200px;
+      }
+      /* 狭い画面では主操作を行いっぱいに（右に空白を残さない・採点 r2 TOP2）。二次操作は下の行のまま */
+      @media (max-width: 480px) {
+        .act-main > .btn-strong {
+          width: 100%;
+        }
+      }
+      .card-msg {
+        margin: 8px 0 0;
+        font-size: 13px;
+        color: var(--text);
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 10px;
+      }
+      .card-msg:empty {
+        display: none;
+      }
+      /* ---- 入力・編集 ---- */
+      .field {
+        display: grid;
+        gap: 2px;
+        margin: 6px 0 0;
+        max-width: 320px;
+      }
+      .field span {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .field input {
+        width: 100%;
+        min-height: 46px;
+        line-height: 22px;
+        padding: 11px 10px;
+        font-family: inherit;
+        font-size: 15px;
+        color: var(--text);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .edit {
+        margin: 10px 0 0;
+        padding: 10px 0 0;
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 8px;
+      }
+      .edit .field {
+        margin: 0;
+      }
+      /* ---- 状態 ---- */
+      .state-box {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 16px;
+        margin: 24px 0;
+        text-align: left;
+      }
+      .state-box h2 {
+        font-size: 16px;
+        margin: 0 0 6px;
+      }
+      .state-box p {
+        margin: 0 0 12px;
+        color: var(--muted);
+      }
+      .notice {
+        margin: 12px 0 0;
+        font-size: 13px;
+        color: var(--text);
+        background: var(--accent-weak);
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        padding: 8px 12px;
+      }
+      .notice:empty {
+        display: none;
+      }
+      /* フッターは 3 状態で同じ（P6）。行頭は本文とそろえる（P29） */
+      .app-foot {
+        margin: 28px 0 40px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 12px;
+      }
+      .app-foot .link {
+        padding-left: 0;
+        padding-right: 0;
+      }
+      .skeleton {
+        height: 76px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        margin-bottom: 12px;
+        opacity: 0.6;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app-head">
+      <div class="wrap">
+        <h1 class="app-name">選考カレンダー（仮）</h1>
+        <p class="last-run" id="last-run">読み込み中</p>
+        <button type="button" class="btn-quiet" id="import-now">いま取り込む</button>
+      </div>
+    </header>
+
+    <main data-state="loading" id="app">
+      <div class="wrap">
+        <p class="notice" id="notice" role="status" aria-live="polite"></p>
+
+        <section class="banner" id="bulk-done" role="status" aria-live="polite" hidden>
+          <p id="bulk-done-text"></p>
+          <button type="button" class="btn-quiet" id="bulk-undo">まとめて取り消す</button>
+        </section>
+
+        <section id="view-loading" aria-label="読み込み中">
+          <p class="last-run">候補を読み込んでいます…</p>
+          <div class="skeleton"></div>
+          <div class="skeleton"></div>
+        </section>
+
+        <section id="view-empty" class="state-box" hidden>
+          <h2>候補はありません</h2>
+          <p id="empty-note">次の取り込みは 2 時間ごとです。届いたばかりのメールを見るなら「いま取り込む」を押してください。</p>
+          <button type="button" class="btn" id="empty-import">いま取り込む</button>
+        </section>
+
+        <section id="view-error" class="state-box" hidden>
+          <h2>初期設定がまだです</h2>
+          <p id="error-note">Apps Script のエディタで setup を一度実行してから、下のボタンを押してください。</p>
+          <button type="button" class="btn" id="error-retry">もう一度読み込む</button>
+        </section>
+
+        <section id="view-list" hidden>
+          <p class="list-note">Gmail から拾った候補です。押すまでカレンダーには入りません。</p>
+          <div class="bulk" id="bulk" hidden>
+            <button type="button" class="btn" id="bulk-register">明記の 0 件をまとめて登録</button>
+            <p class="bulk-note" id="bulk-note">日時と企業名が明記された候補が対象です。日程調整・変更のお知らせ・過去の日付は入りません。</p>
+            <p class="bulk-targets" id="bulk-targets"></p>
+          </div>
+          <div id="groups"></div>
+        </section>
+
+        <footer class="app-foot">
+          <a class="link" id="ledger-link" href="#" target="_blank" rel="noopener" hidden>台帳を開く</a>
+          <span id="ledger-missing" hidden>台帳はまだありません</span>
+          <span>設定（検索日数・キーワード・通知）は台帳の「設定」シートで変えます</span>
+        </footer>
+      </div>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        /** 画面の状態。台帳が正本なので、ここには「いま描いているもの」しか置かない */
+        var state = {
+          candidates: [],
+          settings: {},
+          lastRun: "",
+          lastImportCount: 0,
+          ledgerUrl: "",
+          editing: "",
+          error: "",
+          // 折りたたみの開閉（描き直しをまたいで覚える）。登録済みは開いた状態が既定
+          folds: { noise: false, registered: true },
+          messages: {},
+          busy: {},
+          /*
+           * 上部の帯（直前の操作の結果と、それを戻す手段）。
+           * まとめ登録だけでなく**単体の登録・取り消しの結果もここで返す**（採点 r3 Q5・Q6）。
+           * text = 出す文／ids = 戻せる（まだ登録済みの）id／label = 戻すボタンの文言（空なら出さない）
+           */
+          banner: { text: "", ids: [], label: "" },
+        };
+
+        var WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+        /**
+         * 確度は色ではなく文言で出す（NFR-06・P11）。語彙は「明記／一部推定／要確認」の 1 系統に
+         * そろえ、まとめ登録と区分見出しも同じ語を使う（採点 r2 TOP5）。
+         * 先頭の記号は種別チップと系統を見分けるための目印。
+         */
+        var CONFIDENCE_LABELS = { high: "◎ 明記", medium: "◯ 一部推定", low: "△ 要確認" };
+        var CHIP_LABELS = {
+          interview: "面接",
+          seminar: "説明会",
+          es_deadline: "ES締切",
+          test_deadline: "テスト締切",
+          schedule_request: "要返信",
+          change: "変更",
+          result: "結果",
+          other: "選考",
+        };
+        var GROUPS = [
+          { key: "timed", label: "予定", note: "日時のある候補・近い順" },
+          { key: "deadline", label: "締切", note: "終日予定で入ります" },
+          { key: "choice", label: "日程調整", note: "要返信" },
+          { key: "low", label: "要確認", note: "推定を含む候補" },
+        ];
+        var DEADLINE_KINDS = { es_deadline: true, test_deadline: true };
+        var STATUS_NEW = "候補";
+        var STATUS_REGISTERED = "登録済み";
+
+        // ---------- 小さな道具 ----------
+        function byId(id) {
+          return document.getElementById(id);
+        }
+
+        function el(tag, className, text) {
+          var node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined && text !== null) node.textContent = String(text);
+          return node;
+        }
+
+        function clear(node) {
+          while (node.firstChild) node.removeChild(node.firstChild);
+        }
+
+        function isFilled(value) {
+          return value !== null && value !== undefined && String(value).trim() !== "";
+        }
+
+        // ---------- 日時の整形（ISO 文字列だけを受け取る・Date は作らない） ----------
+        function ymdOf(iso) {
+          var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+          if (!m) return null;
+          return { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) };
+        }
+
+        function timeOf(iso) {
+          var m = /^\d{4}-\d{2}-\d{2}[T ](\d{2}):(\d{2})/.exec(String(iso || ""));
+          if (!m) return null;
+          return m[1] + ":" + m[2];
+        }
+
+        function weekdayLabel(iso) {
+          var ymd = ymdOf(iso);
+          if (!ymd) return "";
+          var index = new Date(Date.UTC(ymd.year, ymd.month - 1, ymd.day)).getUTCDay();
+          return WEEKDAY_LABELS[index] || "";
+        }
+
+        /** 「3/5（木）」 */
+        function formatDate(iso) {
+          var ymd = ymdOf(iso);
+          if (!ymd) return "";
+          return ymd.month + "/" + ymd.day + "（" + weekdayLabel(iso) + "）";
+        }
+
+        /** 「3/5」（注記で企業名と並べるとき） */
+        function formatShortDate(iso) {
+          var ymd = ymdOf(iso);
+          if (!ymd) return "";
+          return ymd.month + "/" + ymd.day;
+        }
+
+        /** 「3/5（木）14:00〜15:00」。終日は日付だけ */
+        function formatWhen(candidate) {
+          var start = candidate.start;
+          var head = formatDate(start);
+          if (!head) return "";
+          var startTime = timeOf(start);
+          if (!startTime) return head;
+          var endTime = timeOf(candidate.end);
+          var sameDay = candidate.end && String(candidate.end).slice(0, 10) === String(start).slice(0, 10);
+          if (endTime && sameDay) return head + startTime + "〜" + endTime;
+          if (endTime) return head + startTime + "〜" + formatDate(candidate.end) + endTime;
+          return head + startTime;
+        }
+
+        /** 「09:12」 */
+        function formatClock(iso) {
+          return timeOf(iso) || "";
+        }
+
+        /**
+         * 日時行を「日付」と「時刻」の 2 つに分けて置く（採点 r3 Q12）。
+         * それぞれの中では折り返さないので、狭い幅でも「11:00〜」で切れて次の行に「12:00」が
+         * 落ちることがない。改行は日付と時刻の間だけで起きる。
+         */
+        function appendWhen(node, text) {
+          var value = String(text || "");
+          var split = /^(.*?[）)])(\d{1,2}:\d{2}[\s\S]*)$/.exec(value);
+          if (!split) {
+            node.textContent = value;
+            return;
+          }
+          node.appendChild(el("span", "nowrap", split[1]));
+          node.appendChild(el("span", "nowrap", split[2]));
+        }
+
+        /** ISO → input[type=datetime-local] の値 */
+        function toLocalInput(iso) {
+          if (!iso) return "";
+          var text = String(iso);
+          if (timeOf(text)) return text.slice(0, 16);
+          var ymd = ymdOf(text);
+          return ymd ? text.slice(0, 10) + "T09:00" : "";
+        }
+
+        /**
+         * 終日予定の通知（`設定` の締切リマインダー分）を「前日 9:00」の形にする。
+         * 終日予定は 0:00 起点なので、900 分前＝前日 9:00。
+         */
+        function reminderPhrase(minutes) {
+          var value = Number(minutes);
+          if (!isFinite(value) || value <= 0) return "";
+          var days = Math.ceil(value / 1440);
+          var clock = days * 1440 - value;
+          var hour = Math.floor(clock / 60);
+          var minute = clock % 60;
+          var head = days === 1 ? "前日" : days + " 日前";
+          return head + " " + hour + ":" + (minute < 10 ? "0" : "") + minute;
+        }
+
+        /** 締切カードの細目「23:59 まで・終日予定＋前日 9:00 に通知」 */
+        function deadlineDetail(candidate) {
+          var time = timeOf(candidate.deadline) || "23:59";
+          var phrase = reminderPhrase(
+            state.settings && state.settings.deadlineReminderMinutes !== undefined
+              ? state.settings.deadlineReminderMinutes
+              : 900
+          );
+          var text = time + " まで・終日予定";
+          return phrase ? text + "＋" + phrase + " に通知" : text;
+        }
+
+        // ---------- 区分わけ ----------
+        function groupOf(candidate) {
+          if (candidate.status === "ノイズ" || candidate.status === "無視") return "noise";
+          // 登録済みは各区分に混ぜず最下部へ（390 の初期表示に操作対象を入れる・P24）
+          if (candidate.status === STATUS_REGISTERED) return "registered";
+          if (candidate.confidence === "low") return "low";
+          if (candidate.kind === "schedule_request") return "choice";
+          if (DEADLINE_KINDS[candidate.kind] === true) return "deadline";
+          if (candidate.start) return "timed";
+          return "low";
+        }
+
+        function sortKeyOf(candidate, group) {
+          if (group === "timed") return String(candidate.start || "9999");
+          if (group === "deadline") return String(candidate.deadline || candidate.start || "9999");
+          if (group === "choice") return String(candidate.deadline || candidate.receivedAt || "9999");
+          if (group === "registered") return String(candidate.start || candidate.deadline || "9999");
+          return String(candidate.receivedAt || "");
+        }
+
+        function partition(list) {
+          var groups = { timed: [], deadline: [], choice: [], low: [], noise: [], registered: [] };
+          for (var i = 0; i < list.length; i += 1) {
+            groups[groupOf(list[i])].push(list[i]);
+          }
+          var names = ["timed", "deadline", "choice", "low", "noise", "registered"];
+          for (var k = 0; k < names.length; k += 1) {
+            var name = names[k];
+            var descending = name === "low" || name === "noise";
+            groups[name].sort(function (a, b) {
+              var left = sortKeyOf(a, name);
+              var right = sortKeyOf(b, name);
+              if (left === right) return 0;
+              if (descending) return left < right ? 1 : -1;
+              return left < right ? -1 : 1;
+            });
+          }
+          return groups;
+        }
+
+        /**
+         * まとめて登録の対象（docs/02 ④）。
+         * 状態が「候補」・確度が「高（明記）」・企業名がある・日時（開始か締切）がある。
+         * **種別が日程調整と変更のものと、受信日より前の日付は入れない**（レビュー r1 重要 3）。
+         * 日程調整は返信が要り、変更（中止）はその日に予定を作ってはいけないため。
+         * ボタンの件数・注記の企業名・実際に送る id は、必ずこの関数から作る（P1）。
+         */
+        function bulkTargets(list) {
+          var out = [];
+          for (var i = 0; i < list.length; i += 1) {
+            var c = list[i];
+            if (c.status !== STATUS_NEW) continue;
+            if (c.confidence !== "high") continue;
+            if (!isFilled(c.company)) continue;
+            if (!isFilled(c.start) && !isFilled(c.deadline)) continue;
+            if (c.registerable === false) continue;
+            if (c.kind === "change" || c.kind === "schedule_request") continue;
+            if (c.isPast === true) continue;
+            out.push(c);
+          }
+          // 注記と登録の順は近い日から（台帳の並び順だと 3/5・3/6・3/12・3/8 のように前後する）
+          out.sort(function (a, b) {
+            var left = String(a.start || a.deadline || "9999");
+            var right = String(b.start || b.deadline || "9999");
+            if (left === right) return 0;
+            return left < right ? -1 : 1;
+          });
+          return out;
+        }
+
+        /** 注記の「3/5 株式会社サンプル商事・…」（5 件を超えたら「ほか n 件」） */
+        function bulkTargetsText(targets) {
+          var parts = [];
+          var shown = targets.length > 5 ? 5 : targets.length;
+          for (var i = 0; i < shown; i += 1) {
+            var at = targets[i].start || targets[i].deadline;
+            var day = formatShortDate(at);
+            parts.push(day ? day + " " + targets[i].company : String(targets[i].company));
+          }
+          var text = parts.join("・");
+          if (targets.length > shown) text += "・ほか " + (targets.length - shown) + " 件";
+          return text;
+        }
+
+        // ---------- サーバー呼び出し ----------
+        function call(name, args, onDone, onFail) {
+          var runner = null;
+          try {
+            runner = window.google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail);
+          } catch (err) {
+            onFail(new Error("サーバーに接続できません"));
+            return;
+          }
+          runner[name].apply(runner, args || []);
+        }
+
+        function messageOf(err) {
+          if (!err) return "エラーが起きました";
+          if (typeof err === "string") return err;
+          return String(err.message || err);
+        }
+
+        // ---------- 描画 ----------
+        function stateName() {
+          if (state.error) return "error";
+          if (state.candidates.length === 0) return "empty";
+          return "list";
+        }
+
+        function setState(name) {
+          byId("app").setAttribute("data-state", name);
+          byId("view-loading").hidden = name !== "loading";
+          byId("view-empty").hidden = name !== "empty";
+          byId("view-error").hidden = name !== "error";
+          byId("view-list").hidden = name !== "list";
+          /*
+           * 「いま取り込む」を 2 つ見せない（カード内に主操作があるときは隠す・P28）。
+           * error も empty と同じ扱いで隠す＝「一覧が空」の系統で処理を 2 通りにしない（採点 r3 Q18）。
+           */
+          byId("import-now").hidden = name === "empty" || name === "error";
+          byId("import-now").disabled = false;
+        }
+
+        function setNotice(text) {
+          byId("notice").textContent = text || "";
+        }
+
+        /** いま「候補」の状態にある件数（登録済み・ノイズ・無視は数えない） */
+        function countNew() {
+          var count = 0;
+          for (var i = 0; i < state.candidates.length; i += 1) {
+            if (state.candidates[i].status === STATUS_NEW) count += 1;
+          }
+          return count;
+        }
+
+        function renderHead(name) {
+          var line = "まだ取り込んでいません";
+          if (state.lastRun) {
+            // 分母（読んだメール）と分子（候補）を並べる。0 件でも同じ形にそろえる（採点 r3 Q9・Q10）
+            line =
+              "最終取り込み " +
+              formatClock(state.lastRun) +
+              "・メール " +
+              (state.lastImportCount || 0) +
+              " 件から候補 " +
+              countNew() +
+              " 件";
+          }
+          byId("last-run").textContent = line;
+          var hours = state.settings && state.settings.intervalHours ? state.settings.intervalHours : 2;
+          byId("empty-note").textContent =
+            "次の取り込みは " + hours + " 時間ごとです。届いたばかりのメールを見るなら「いま取り込む」を押してください。";
+          // フッターは 3 状態で同じ形。URL が取れないときは代わりに一言出す（P6）
+          var link = byId("ledger-link");
+          var missing = byId("ledger-missing");
+          if (state.ledgerUrl) {
+            link.href = state.ledgerUrl;
+            link.hidden = false;
+            missing.hidden = true;
+          } else {
+            link.hidden = true;
+            missing.hidden = false;
+          }
+        }
+
+        /**
+         * 上部の帯。戻す手段が付いている帯は、戻せる id が無くなったら帯ごと消す
+         * （「まとめて取り消す」を押した後・カードから 1 件ずつ取り消した後）。
+         */
+        function renderBanner() {
+          var box = byId("bulk-done");
+          var button = byId("bulk-undo");
+          if (!state.banner.text) {
+            box.hidden = true;
+            return;
+          }
+          var ids = activeBannerIds();
+          if (state.banner.label && ids.length === 0) {
+            box.hidden = true;
+            return;
+          }
+          byId("bulk-done-text").textContent = state.banner.text;
+          button.hidden = !state.banner.label;
+          if (state.banner.label) button.textContent = state.banner.label;
+          box.hidden = false;
+        }
+
+        /** 帯の戻すボタンが戻せるのは、まだ登録済みのままの id だけ */
+        function activeBannerIds() {
+          var out = [];
+          for (var i = 0; i < state.banner.ids.length; i += 1) {
+            var candidate = findCandidate(state.banner.ids[i]);
+            if (candidate && candidate.status === STATUS_REGISTERED) out.push(state.banner.ids[i]);
+          }
+          return out;
+        }
+
+        /** 帯を出す（label が空なら結果を伝えるだけの帯） */
+        function setBanner(text, ids, label) {
+          state.banner = { text: text || "", ids: ids || [], label: label || "" };
+        }
+
+        function chipFor(candidate) {
+          var label = CHIP_LABELS[candidate.kind] || "選考";
+          if (candidate.kind === "interview" && candidate.stage) label = candidate.stage + "面接";
+          return el("span", "chip chip-kind", "【" + label + "】");
+        }
+
+        function whenTextOf(candidate) {
+          if (candidate.status === STATUS_REGISTERED) {
+            // 登録した範囲をそのまま出す。終日は「終日」と書く（P10）
+            // 「✓ 登録済み」は上の小ラベルに分けてあるので、ここは日時だけ（採点 r3 Q12）
+            if (candidate.start && timeOf(candidate.start)) return formatWhen(candidate);
+            var day = formatDate(candidate.start || candidate.deadline);
+            return day ? day + "終日" : "登録した日時は不明です";
+          }
+          if (candidate.kind === "schedule_request") {
+            var by = candidate.deadline ? formatDate(candidate.deadline) : "";
+            return by ? "返信期限 " + by : "返信期限は未記載";
+          }
+          if (DEADLINE_KINDS[candidate.kind] === true) {
+            // 最大の文字は日付にする。時刻は下の細目へ（P9）
+            var date = formatDate(candidate.deadline);
+            return date ? date + "締切" : "締切の日付なし";
+          }
+          if (candidate.start) return formatWhen(candidate);
+          if (candidate.deadline) return formatDate(candidate.deadline) + "締切";
+          return "日時なし";
+        }
+
+        function renderCard(candidate) {
+          var card = el("article", "card");
+          card.setAttribute("data-id", candidate.id);
+          card.setAttribute("data-status", candidate.status);
+          card.setAttribute("data-kind", candidate.kind);
+          card.setAttribute("data-confidence", candidate.confidence);
+
+          // 登録済みは「✓ 登録済み」を日時の上の小ラベルにする（390 で時刻が折り返さない・採点 r3 Q12）
+          if (candidate.status === STATUS_REGISTERED) card.appendChild(el("p", "when-label", "✓ 登録済み"));
+
+          var head = el("div", "card-when");
+          var whenText = whenTextOf(candidate);
+          var when = el("span", "when");
+          if (whenText === "日時なし" || whenText === "締切の日付なし" || whenText === "返信期限は未記載") {
+            when.className = "when when-none";
+          }
+          appendWhen(when, whenText);
+          head.appendChild(when);
+          card.appendChild(head);
+
+          if (DEADLINE_KINDS[candidate.kind] === true && candidate.deadline) {
+            card.appendChild(el("p", "when-sub", deadlineDetail(candidate)));
+          }
+
+          // 変更・中止の連絡は、日時行のすぐ下で「予定を作る話ではない」と伝える（採点 r3 Q7）
+          if (candidate.kind === "change") {
+            card.appendChild(
+              el(
+                "p",
+                "note-change",
+                "変更・中止の連絡です。予定の作成でなく、既に入れた予定の見直しに使ってください。"
+              )
+            );
+          }
+
+          var chips = el("div", "card-chips");
+          chips.appendChild(chipFor(candidate));
+          // 確度は「登録して良い候補か」の目印なので、登録済みには出さない（採点 r3 Q19）
+          if (candidate.status !== STATUS_REGISTERED) {
+            chips.appendChild(el("span", "chip confidence", CONFIDENCE_LABELS[candidate.confidence] || "要確認"));
+          }
+          card.appendChild(chips);
+
+          var companyInput = null;
+          if (isFilled(candidate.company)) {
+            card.appendChild(el("p", "company", candidate.company));
+          } else {
+            // ラベルを置き、枠はグレー（フォーカス中に見えないように・P19）
+            var wrap = el("label", "field company-field");
+            wrap.appendChild(el("span", null, "企業名"));
+            companyInput = el("input", "company-input");
+            companyInput.type = "text";
+            companyInput.placeholder = "企業名を入力";
+            companyInput.setAttribute("data-role", "company");
+            wrap.appendChild(companyInput);
+            card.appendChild(wrap);
+          }
+
+          var meta = el("p", "meta");
+          meta.appendChild(el("span", "subject", candidate.subject || "（件名なし）"));
+          card.appendChild(meta);
+
+          if (candidate.location) card.appendChild(el("p", "place", "場所: " + candidate.location));
+          if (candidate.url) card.appendChild(el("p", "place", "会議 URL あり"));
+          // 受信日より前の日付＝年の推定が外れている疑い（docs/01 FR-03）。押す前に気づけるように出す
+          if (candidate.isPast === true) {
+            card.appendChild(el("p", "place", "この日付は受信日より前です。年が違っていないか確かめてください"));
+          }
+          if (candidate.choices && candidate.choices.length > 0) {
+            card.appendChild(el("p", "choices-label", "候補日"));
+            var choices = el("ul", "choices");
+            choices.setAttribute("aria-label", "候補日");
+            for (var i = 0; i < candidate.choices.length; i += 1) {
+              choices.appendChild(el("li", null, formatWhen({ start: candidate.choices[i], end: null })));
+            }
+            card.appendChild(choices);
+          }
+
+          card.appendChild(renderActions(candidate));
+
+          if (state.editing === candidate.id) card.appendChild(renderEditForm(candidate));
+
+          var msg = el("p", "card-msg", state.messages[candidate.id] || "");
+          msg.setAttribute("role", "status");
+          msg.setAttribute("aria-live", "polite");
+          card.appendChild(msg);
+
+          if (companyInput) bindCompanyInput(card, companyInput);
+          return card;
+        }
+
+        /**
+         * 企業名の欄に何か入ったら、案内を消して「登録」の無効表示も解く
+         * （描き直さずに切り替える・P20）。空のまま押されたときは registerCandidate がこの欄へ案内する。
+         */
+        function bindCompanyInput(card, input) {
+          input.addEventListener("input", function () {
+            var filled = input.value.trim() !== "";
+            var hint = card.querySelector(".hint-company");
+            if (hint) hint.hidden = filled;
+            var register = card.querySelector('button[data-action="register"]');
+            if (!register) return;
+            if (filled) register.removeAttribute("aria-disabled");
+            else register.setAttribute("aria-disabled", "true");
+          });
+        }
+
+        function quietButton(label, action, busy) {
+          var button = el("button", "btn-quiet", label);
+          button.type = "button";
+          button.disabled = busy === true;
+          button.setAttribute("data-action", action);
+          return button;
+        }
+
+        function quietLink(label, url) {
+          var link = el("a", "btn-quiet", label);
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noopener";
+          return link;
+        }
+
+        /** 主操作としてのリンク（変更・中止の連絡の「Gmail で確認する」・採点 r3 Q7） */
+        function strongLink(label, url) {
+          var link = el("a", "btn-strong", label);
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noopener";
+          return link;
+        }
+
+        /**
+         * 操作行は「主ボタン 1 行＋（足りない項目の 1 行）＋二次操作 1 行」で全カード同じ（P3・P17）。
+         * 主操作はティール枠の強調白抜き、二次操作は白抜き（高さ 46・左右 padding 12・要素間 8）。
+         *
+         * 情報が足りないときの扱いは 1 ルール（採点 r2 TOP3・採点 r3 Q1〜Q3）:
+         * - 日時も締切も無い（`registerable === false`）→「登録」を出さず「編集して日時を入れる」
+         * - 日時はあるが企業名が無い →「登録」は出すが**無効の見た目**（`aria-disabled`）にする。
+         *   押すと欄へ案内するので `disabled` にはしない
+         * - 理由の 1 行はどちらも**主操作のすぐ下**に置く（2 枚で位置をそろえる）
+         *
+         * 変更・中止の連絡（`kind === "change"`）は主操作を「Gmail で確認する」にし、
+         * 「登録」は二次操作へ落とす（変更後の新しい日時を入れたいことがあるので残す・採点 r3 Q7）。
+         */
+        function renderActions(candidate) {
+          var actions = el("div", "actions");
+          var busy = state.busy[candidate.id] === true;
+          var main = el("div", "act-row act-main");
+          var sub = el("div", "act-row act-sub");
+          var reason = "";
+          var reasonKind = "hint-plan";
+
+          /** 「登録」ボタン（強調＝主操作／白抜き＝二次操作） */
+          var registerButton = function (strong) {
+            var label = candidate.kind === "schedule_request" ? "【要返信】として登録" : "登録";
+            var button = el("button", strong ? "btn-strong" : "btn-quiet", busy ? "登録中…" : label);
+            button.type = "button";
+            button.disabled = busy;
+            button.setAttribute("data-action", "register");
+            // 必須（企業名）が欠けている間は無効の見た目にする（採点 r3 Q1）
+            if (!isFilled(candidate.company)) button.setAttribute("aria-disabled", "true");
+            return button;
+          };
+
+          /** 「編集」ボタン */
+          var editButton = function (strong, openLabel) {
+            var button = el(
+              "button",
+              strong ? "btn-strong" : "btn-quiet",
+              state.editing === candidate.id ? "編集をやめる" : openLabel
+            );
+            button.type = "button";
+            button.setAttribute("data-action", "edit");
+            return button;
+          };
+
+          if (candidate.status === STATUS_REGISTERED) {
+            if (candidate.calendarUrl) sub.appendChild(quietLink("カレンダーで開く", candidate.calendarUrl));
+            if (candidate.gmailUrl) sub.appendChild(quietLink("Gmail で開く", candidate.gmailUrl));
+            var undo = quietButton(busy ? "取り消し中…" : "取り消す", "undo", busy);
+            undo.className = "btn-quiet btn-undo";
+            sub.appendChild(undo);
+          } else if (candidate.status === "ノイズ" || candidate.status === "無視") {
+            main.appendChild(quietButton(busy ? "戻しています…" : "候補にする", "restore", busy));
+            if (candidate.gmailUrl) sub.appendChild(quietLink("Gmail で開く", candidate.gmailUrl));
+          } else if (candidate.kind === "change") {
+            if (candidate.gmailUrl) main.appendChild(strongLink("Gmail で確認する", candidate.gmailUrl));
+            if (candidate.registerable === false) {
+              reason = candidate.planReason || "";
+              sub.appendChild(editButton(false, "編集して日時を入れる"));
+            } else {
+              sub.appendChild(registerButton(false));
+              sub.appendChild(editButton(false, "編集"));
+            }
+            sub.appendChild(quietButton("無視", "ignore", busy));
+          } else if (candidate.registerable === false) {
+            // カレンダーに入れる日付が無いので、主操作は編集そのものにする
+            main.appendChild(editButton(true, "編集して日時を入れる"));
+            reason = candidate.planReason || "";
+
+            sub.appendChild(quietButton("無視", "ignore", busy));
+            if (candidate.gmailUrl) sub.appendChild(quietLink("Gmail で開く", candidate.gmailUrl));
+          } else {
+            main.appendChild(registerButton(true));
+            if (!isFilled(candidate.company)) {
+              reason = "企業名を入れてから登録してください";
+              reasonKind = "hint-company";
+            }
+
+            sub.appendChild(quietButton("無視", "ignore", busy));
+            sub.appendChild(editButton(false, "編集"));
+            if (candidate.gmailUrl) sub.appendChild(quietLink("Gmail で開く", candidate.gmailUrl));
+          }
+
+          if (main.firstChild) actions.appendChild(main);
+          // 足りない項目は主操作のすぐ下に 1 行（採点 r2 TOP3・位置は 2 枚でそろえる・採点 r3 Q3）
+          if (reason) actions.appendChild(el("p", "hint " + reasonKind, reason));
+          if (sub.firstChild) actions.appendChild(sub);
+          return actions;
+        }
+
+        function field(labelText, type, value, role) {
+          var wrap = el("label", "field");
+          wrap.appendChild(el("span", null, labelText));
+          var input = el("input");
+          input.type = type;
+          input.value = value || "";
+          input.setAttribute("data-role", role);
+          wrap.appendChild(input);
+          return wrap;
+        }
+
+        function renderEditForm(candidate) {
+          var form = el("form", "edit");
+          form.setAttribute("data-role", "edit-form");
+          form.appendChild(field("タイトル", "text", candidate.title || "", "title"));
+          form.appendChild(field("企業名", "text", candidate.company || "", "company"));
+          form.appendChild(field("開始", "datetime-local", toLocalInput(candidate.start), "start"));
+          form.appendChild(field("終了", "datetime-local", toLocalInput(candidate.end), "end"));
+          form.appendChild(
+            field("締切", "date", candidate.deadline ? String(candidate.deadline).slice(0, 10) : "", "deadline")
+          );
+          form.appendChild(field("場所", "text", candidate.location || "", "location"));
+          var submit = el("button", "btn-strong", "この内容で登録");
+          submit.type = "submit";
+          // 送信中は押せないようにする（二重クリックで予定が 2 件できるのを止める・レビュー r1 重要 1）
+          submit.disabled = state.busy[candidate.id] === true;
+          form.appendChild(submit);
+          return form;
+        }
+
+        /**
+         * 折りたたみの区分（ノイズ・無視／登録済み）。
+         * 閉じているときは中身をまったく作らない＝空の帯を出さない（P5）。
+         * 開閉は summary の click を自分で受ける（toggle だと描き直しと往復して無限に回る）。
+         */
+        function renderFold(key, id, summaryText, build) {
+          var open = state.folds[key] === true;
+          var box = el("details", "fold group");
+          box.id = id;
+          box.open = open;
+          var summary = el("summary", null, summaryText);
+          box.appendChild(summary);
+          if (open) box.appendChild(build());
+          summary.addEventListener("click", function (event) {
+            event.preventDefault();
+            state.folds[key] = !open;
+            renderList();
+          });
+          return box;
+        }
+
+        function noiseList(list) {
+          var items = el("ul", "noise-list");
+          for (var i = 0; i < list.length; i += 1) {
+            var candidate = list[i];
+            var item = el("li", "noise-item");
+            item.setAttribute("data-id", candidate.id);
+            item.appendChild(el("span", "noise-subject", candidate.subject || "（件名なし）"));
+            item.appendChild(el("span", "noise-from", candidate.from || ""));
+            item.appendChild(quietButton("候補にする", "restore", state.busy[candidate.id] === true));
+            // 中身を見ずに候補へ戻す判断をしないで済むように、候補カードと同じ導線を並べる（採点 r3 Q17）
+            if (candidate.gmailUrl) item.appendChild(quietLink("Gmail で開く", candidate.gmailUrl));
+            items.appendChild(item);
+          }
+          return items;
+        }
+
+        function cardList(list) {
+          var cards = el("div", "cards");
+          for (var i = 0; i < list.length; i += 1) cards.appendChild(renderCard(list[i]));
+          return cards;
+        }
+
+        function renderList() {
+          var groups = partition(state.candidates);
+          var host = byId("groups");
+          clear(host);
+
+          for (var i = 0; i < GROUPS.length; i += 1) {
+            var spec = GROUPS[i];
+            var list = groups[spec.key];
+            if (list.length === 0) continue;
+            var section = el("section", "group");
+            section.id = "group-" + spec.key;
+            var head = el("h2", "group-head", spec.label + " ");
+            head.appendChild(el("span", "group-count", list.length + " 件・" + spec.note));
+            section.appendChild(head);
+            section.appendChild(cardList(list));
+            host.appendChild(section);
+          }
+
+          if (groups.noise.length > 0) {
+            var noise = groups.noise;
+            host.appendChild(
+              renderFold("noise", "group-noise", "ノイズ・無視 " + noise.length + " 件は候補から外しています", function () {
+                return noiseList(noise);
+              })
+            );
+          }
+
+          if (groups.registered.length > 0) {
+            var registered = groups.registered;
+            host.appendChild(
+              renderFold("registered", "group-registered", "登録済み " + registered.length + " 件", function () {
+                return cardList(registered);
+              })
+            );
+          }
+
+          var targets = bulkTargets(state.candidates);
+          byId("bulk-register").textContent = "明記の " + targets.length + " 件をまとめて登録";
+          byId("bulk-targets").textContent = bulkTargetsText(targets);
+          byId("bulk").hidden = targets.length === 0;
+        }
+
+        function render() {
+          var name = stateName();
+          renderHead(name);
+          renderBanner();
+          if (name === "list") renderList();
+          setState(name);
+        }
+
+        // ---------- 読み込み ----------
+        function load(onDone) {
+          call(
+            "api_listCandidates",
+            [],
+            function (result) {
+              state.error = "";
+              state.candidates = (result && result.candidates) || [];
+              state.settings = (result && result.settings) || {};
+              state.lastRun = (result && result.lastRun) || "";
+              state.lastImportCount = (result && result.lastImportCount) || 0;
+              state.ledgerUrl = (result && result.ledgerUrl) || state.ledgerUrl;
+              render();
+              if (onDone) onDone();
+            },
+            function (err) {
+              // 文言は画面側の固定文（開発用語を出さない・P7）。台帳の URL は分かっていれば残す
+              state.error = messageOf(err);
+              render();
+              if (onDone) onDone();
+            }
+          );
+        }
+
+        function replaceCandidate(candidate) {
+          if (!candidate || !candidate.id) return;
+          for (var i = 0; i < state.candidates.length; i += 1) {
+            if (state.candidates[i].id === candidate.id) {
+              state.candidates[i] = candidate;
+              return;
+            }
+          }
+          state.candidates.push(candidate);
+        }
+
+        function findCandidate(id) {
+          for (var i = 0; i < state.candidates.length; i += 1) {
+            if (state.candidates[i].id === id) return state.candidates[i];
+          }
+          return null;
+        }
+
+        function setBusy(id, value) {
+          if (value) state.busy[id] = true;
+          else delete state.busy[id];
+        }
+
+        /**
+         * カードに残すのは**うまくいかなかったとき**だけ（そのカードはその場に留まる）。
+         * うまくいった操作はカードが別の区分へ移るので、上部の一言で行き先を伝える（P22）。
+         */
+        function setMessage(id, text) {
+          state.messages[id] = text || "";
+        }
+
+        // ---------- 操作 ----------
+        function collectEdits(card) {
+          var edits = {};
+          var form = card.querySelector('form[data-role="edit-form"]');
+          if (form) {
+            var roles = ["title", "company", "start", "end", "deadline", "location"];
+            for (var i = 0; i < roles.length; i += 1) {
+              var input = form.querySelector('input[data-role="' + roles[i] + '"]');
+              if (input) edits[roles[i]] = input.value;
+            }
+          }
+          // カード上の「企業名」の欄は編集フォームより後に読む（そこに書いた値を優先する）
+          var inline = card.querySelector("input.company-input");
+          if (inline && inline.value.trim() !== "") edits.company = inline.value.trim();
+          return edits;
+        }
+
+        function registerCandidate(id, card) {
+          // 送信中の候補は二度送らない（二重クリックで消せない予定が残る・レビュー r1 重要 1）
+          if (state.busy[id] === true) return;
+          var candidate = findCandidate(id);
+          if (!candidate) return;
+          var edits = collectEdits(card);
+          // 企業名が空のまま押されたら送らずに入力へ案内する（採点 r2 TOP3）
+          var inline = card.querySelector("input.company-input");
+          if (inline && !isFilled(edits.company)) {
+            var note = "企業名を入れてから、もう一度「登録」を押してください";
+            setMessage(id, note);
+            var box = card.querySelector(".card-msg");
+            if (box) box.textContent = note;
+            inline.focus();
+            return;
+          }
+          setBusy(id, true);
+          setMessage(id, "");
+          render();
+          call(
+            "api_registerCandidate",
+            [id, JSON.stringify(edits)],
+            function (result) {
+              setBusy(id, false);
+              if (result && result.candidate) replaceCandidate(result.candidate);
+              if (result && result.ok) {
+                state.editing = state.editing === id ? "" : state.editing;
+                setMessage(id, "");
+                // 結果は上部の帯で返し、その場で戻せるようにする（採点 r3 Q5）
+                setBanner("カレンダーに登録しました。下の「登録済み」に移りました", [id], "元に戻す");
+                setNotice("");
+              } else {
+                setMessage(id, (result && result.reason) || "登録できませんでした");
+              }
+              render();
+            },
+            function (err) {
+              setBusy(id, false);
+              setMessage(id, "登録できませんでした: " + messageOf(err) + "（もう一度お試しください）");
+              render();
+            }
+          );
+        }
+
+        /**
+         * 押すと状態だけが変わる操作（無視・候補に戻す・取り消す）。
+         * @param {boolean} [useBanner] 結果を上部の帯で返す（取り消しの結果・採点 r3 Q6）
+         */
+        function simpleAction(id, method, doneText, useBanner) {
+          setBusy(id, true);
+          setMessage(id, "");
+          render();
+          call(
+            method,
+            [id],
+            function (result) {
+              setBusy(id, false);
+              if (result && result.candidate) replaceCandidate(result.candidate);
+              if (result && result.ok === false) {
+                setMessage(id, result.reason || "できませんでした");
+              } else {
+                setMessage(id, "");
+                if (useBanner === true) {
+                  setBanner(doneText, [], "");
+                  setNotice("");
+                } else {
+                  setNotice(doneText);
+                }
+              }
+              render();
+            },
+            function (err) {
+              setBusy(id, false);
+              setMessage(id, messageOf(err) + "（もう一度お試しください）");
+              render();
+            }
+          );
+        }
+
+        function registerBulk() {
+          var targets = bulkTargets(state.candidates);
+          if (targets.length === 0) return;
+          var ids = [];
+          for (var i = 0; i < targets.length; i += 1) ids.push(targets[i].id);
+          var button = byId("bulk-register");
+          button.disabled = true;
+          button.textContent = "登録中…";
+          setNotice("");
+          call(
+            "api_registerBulk",
+            [JSON.stringify(ids)],
+            function (result) {
+              button.disabled = false;
+              var results = (result && result.results) || [];
+              var registered = (result && result.registeredIds) || [];
+              var failed = 0;
+              for (var k = 0; k < results.length; k += 1) {
+                if (results[k].candidate) replaceCandidate(results[k].candidate);
+                if (!results[k].ok) {
+                  failed += 1;
+                  setMessage(results[k].id, results[k].reason || "登録できませんでした");
+                }
+              }
+              // 帯の「まとめて取り消す」はこの id だけを戻す（P2）
+              setBanner(registered.length + " 件を登録しました", registered.slice(), "まとめて取り消す");
+              setNotice(failed > 0 ? failed + " 件は登録できませんでした" : "");
+              render();
+            },
+            function (err) {
+              button.disabled = false;
+              setNotice("まとめて登録できませんでした: " + messageOf(err));
+              render();
+            }
+          );
+        }
+
+        /**
+         * 帯の戻すボタン。直前の登録ぶん（まとめ登録なら N 件・単体なら 1 件）を順に取り消す。
+         * 単体（「元に戻す」）のときは結果もまた帯で返す＝どこを見れば結果が分かるかを変えない。
+         */
+        function undoBulk() {
+          var ids = activeBannerIds();
+          if (ids.length === 0) return;
+          var single = state.banner.label === "元に戻す";
+          var button = byId("bulk-undo");
+          button.disabled = true;
+          button.textContent = "取り消しています…";
+          var done = 0;
+          var failed = 0;
+
+          function finish() {
+            button.disabled = false;
+            if (single && failed === 0) {
+              setBanner("登録を取り消しました。「候補」に戻しました", [], "");
+              setNotice("");
+            } else {
+              setBanner("", [], "");
+              setNotice(done + " 件の登録を取り消しました" + (failed > 0 ? "。" + failed + " 件は取り消せませんでした" : ""));
+            }
+            render();
+          }
+
+          function step(index) {
+            if (index >= ids.length) {
+              finish();
+              return;
+            }
+            call(
+              "api_undoRegister",
+              [ids[index]],
+              function (result) {
+                if (result && result.candidate) replaceCandidate(result.candidate);
+                if (result && result.ok === false) failed += 1;
+                else done += 1;
+                setMessage(ids[index], "");
+                step(index + 1);
+              },
+              function () {
+                failed += 1;
+                step(index + 1);
+              }
+            );
+          }
+          step(0);
+        }
+
+        function importNow() {
+          var buttons = [byId("import-now"), byId("empty-import")];
+          for (var i = 0; i < buttons.length; i += 1) {
+            buttons[i].disabled = true;
+            buttons[i].textContent = "取り込み中…";
+          }
+          setNotice("Gmail を読んでいます…");
+          call(
+            "api_importNow",
+            [],
+            function (result) {
+              for (var k = 0; k < buttons.length; k += 1) {
+                buttons[k].disabled = false;
+                buttons[k].textContent = "いま取り込む";
+              }
+              var added = (result && result.added) || 0;
+              var noise = (result && result.noise) || 0;
+              setNotice("候補 " + added + " 件・ノイズ " + noise + " 件を取り込みました");
+              load();
+            },
+            function (err) {
+              for (var k = 0; k < buttons.length; k += 1) {
+                buttons[k].disabled = false;
+                buttons[k].textContent = "いま取り込む";
+              }
+              setNotice("取り込めませんでした: " + messageOf(err));
+            }
+          );
+        }
+
+        // ---------- 入力 ----------
+        /** 押されたものから上へたどって、候補 id を持つ入れ物（カード or ノイズ行）を探す */
+        function cardOf(node) {
+          var current = node;
+          while (current && current !== document.body) {
+            if (current.getAttribute && current.getAttribute("data-id")) return current;
+            current = current.parentNode;
+          }
+          return null;
+        }
+
+        document.addEventListener("click", function (event) {
+          var target = event.target;
+          if (!target || target.nodeType !== 1) return;
+          var action = target.getAttribute ? target.getAttribute("data-action") : null;
+          if (!action) return;
+          var card = cardOf(target);
+          if (!card) return;
+          var id = card.getAttribute("data-id");
+          if (!id) return;
+          if (action === "register") {
+            registerCandidate(id, card);
+          } else if (action === "ignore") {
+            simpleAction(id, "api_ignoreCandidate", "無視にしました。下の「ノイズ・無視」に移りました");
+          } else if (action === "restore") {
+            simpleAction(id, "api_restoreCandidate", "候補に戻しました");
+          } else if (action === "undo") {
+            simpleAction(id, "api_undoRegister", "登録を取り消しました。「候補」に戻しました", true);
+          } else if (action === "edit") {
+            state.editing = state.editing === id ? "" : id;
+            render();
+          }
+        });
+
+        document.addEventListener("submit", function (event) {
+          var form = event.target;
+          if (!form || form.getAttribute("data-role") !== "edit-form") return;
+          event.preventDefault();
+          var card = cardOf(form);
+          if (!card) return;
+          registerCandidate(card.getAttribute("data-id"), card);
+        });
+
+        byId("import-now").addEventListener("click", importNow);
+        byId("empty-import").addEventListener("click", importNow);
+        byId("bulk-register").addEventListener("click", registerBulk);
+        byId("bulk-undo").addEventListener("click", undoBulk);
+        byId("error-retry").addEventListener("click", function () {
+          setState("loading");
+          load();
+        });
+
+        load();
+      })();
+    </script>
+  </body>
+</html>

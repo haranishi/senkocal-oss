@@ -1,0 +1,37 @@
+{
+  "isNoise": false,
+  "kind": "seminar",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0036_1",
+      "kind": "seminar",
+      "stage": null,
+      "company": "サンプル銀行株式会社",
+      "media": "direct",
+      "start": "2026-03-05T10:00:00+09:00",
+      "end": "2026-03-05T11:00:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "オンライン",
+      "url": null,
+      "confidence": "high"
+    },
+    {
+      "id": "c_m0036_2",
+      "kind": "seminar",
+      "stage": null,
+      "company": "サンプル銀行株式会社",
+      "media": "direct",
+      "start": "2026-03-06T14:00:00+09:00",
+      "end": "2026-03-06T15:00:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "オンライン",
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

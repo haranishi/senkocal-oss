@@ -1,0 +1,26 @@
+{
+  "isNoise": false,
+  "kind": "schedule_request",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0012_1",
+      "kind": "schedule_request",
+      "stage": null,
+      "company": "株式会社サンプル広告",
+      "media": "direct",
+      "start": null,
+      "end": null,
+      "allDay": true,
+      "deadline": "2026-03-03",
+      "choices": [
+        "2026-03-05T14:00:00+09:00",
+        "2026-03-06T10:00:00+09:00",
+        "2026-03-09T13:00:00+09:00"
+      ],
+      "location": null,
+      "url": null,
+      "confidence": "medium"
+    }
+  ]
+}

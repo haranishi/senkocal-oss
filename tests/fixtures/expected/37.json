@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "result",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0037_1",
+      "kind": "interview",
+      "stage": "2次",
+      "company": "株式会社サンプル精密",
+      "media": "direct",
+      "start": "2026-03-12T14:00:00+09:00",
+      "end": "2026-03-12T15:00:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "本社 5F 会議室",
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

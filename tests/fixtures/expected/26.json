@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "es_deadline",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0026_1",
+      "kind": "es_deadline",
+      "stage": null,
+      "company": "サンプル製薬株式会社",
+      "media": "direct",
+      "start": null,
+      "end": null,
+      "allDay": true,
+      "deadline": "2026-03-10T12:00:00+09:00",
+      "choices": [],
+      "location": null,
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

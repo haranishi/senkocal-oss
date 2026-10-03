@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "seminar",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0041_1",
+      "kind": "seminar",
+      "stage": null,
+      "company": "株式会社サンプル印刷",
+      "media": "direct",
+      "start": null,
+      "end": null,
+      "allDay": false,
+      "deadline": "2026-03-10T23:59:00+09:00",
+      "choices": [],
+      "location": null,
+      "url": null,
+      "confidence": "low"
+    }
+  ]
+}

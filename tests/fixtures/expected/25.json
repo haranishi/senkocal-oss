@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "seminar",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0025_1",
+      "kind": "seminar",
+      "stage": null,
+      "company": "株式会社サンプル食品",
+      "media": "direct",
+      "start": "2026-03-06T13:30:00+09:00",
+      "end": null,
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": null,
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

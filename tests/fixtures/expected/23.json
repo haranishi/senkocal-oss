@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "interview",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0023_1",
+      "kind": "interview",
+      "stage": null,
+      "company": "株式会社サンプル物流サービス",
+      "media": "direct",
+      "start": "2026-03-05T14:00:00+09:00",
+      "end": "2026-03-05T15:00:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "Web面接(Microsoft Teams)",
+      "url": "https://teams.microsoft.com/l/meetup-join/abcdef",
+      "confidence": "high"
+    }
+  ]
+}

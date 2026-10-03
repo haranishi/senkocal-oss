@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "seminar",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0035_1",
+      "kind": "seminar",
+      "stage": null,
+      "company": "株式会社サンプル百貨店",
+      "media": "direct",
+      "start": "2026-03-18T10:00:00+09:00",
+      "end": null,
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "サンプルホール 3F",
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

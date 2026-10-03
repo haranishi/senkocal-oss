@@ -1,0 +1,16 @@
+{
+  "name": "senkocal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "選考カレンダー（仮）— 選考メールから予定候補を作り、押すだけでカレンダーへ入れる本人専用の GAS ツール",
+  "scripts": {
+    "test:unit": "node --test \"tests/unit/**/*.test.mjs\"",
+    "test:policy": "node --test tests/policy.test.mjs",
+    "build": "node tools/build-gas.mjs",
+    "test:e2e": "node node_modules/@playwright/test/cli.js test",
+    "test": "npm run test:unit && npm run build && npm run test:policy && npm run test:e2e",
+    "calibrate": "node tools/calibrate.mjs",
+    "shots": "node tools/screenshots.mjs"
+  }
+}

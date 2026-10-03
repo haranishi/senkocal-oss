@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "interview",
+  "stage": "2次",
+  "candidates": [
+    {
+      "id": "c_m0011_1",
+      "kind": "interview",
+      "stage": "2次",
+      "company": "サンプル情報システム株式会社",
+      "media": "sonar",
+      "start": "2026-03-11T16:30:00+09:00",
+      "end": "2026-03-11T17:30:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "本社 8F 面接室",
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

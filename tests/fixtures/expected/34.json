@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "interview",
+  "stage": "カジュアル",
+  "candidates": [
+    {
+      "id": "c_m0034_1",
+      "kind": "interview",
+      "stage": "カジュアル",
+      "company": "サンプルキャリア株式会社",
+      "media": "direct",
+      "start": "2026-03-27T11:00:00+09:00",
+      "end": "2026-03-27T12:00:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "オンライン(Google Meet)",
+      "url": "https://meet.google.com/abc-defg-hij",
+      "confidence": "high"
+    }
+  ]
+}

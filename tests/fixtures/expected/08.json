@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "es_deadline",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0008_1",
+      "kind": "es_deadline",
+      "stage": null,
+      "company": "サンプルフーズ株式会社",
+      "media": "careertasu",
+      "start": null,
+      "end": null,
+      "allDay": true,
+      "deadline": "2026-03-10T23:59:00+09:00",
+      "choices": [],
+      "location": null,
+      "url": null,
+      "confidence": "medium"
+    }
+  ]
+}

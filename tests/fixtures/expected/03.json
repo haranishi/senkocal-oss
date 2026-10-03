@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "seminar",
+  "stage": null,
+  "candidates": [
+    {
+      "id": "c_m0003_1",
+      "kind": "seminar",
+      "stage": null,
+      "company": "合同会社テストワークス",
+      "media": "direct",
+      "start": "2026-02-20T13:00:00+09:00",
+      "end": "2026-02-20T14:30:00+09:00",
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "サンプルビル 5F セミナールーム",
+      "url": null,
+      "confidence": "high"
+    }
+  ]
+}

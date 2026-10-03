@@ -1,0 +1,22 @@
+{
+  "isNoise": false,
+  "kind": "interview",
+  "stage": "最終",
+  "candidates": [
+    {
+      "id": "c_m0002_1",
+      "kind": "interview",
+      "stage": "最終",
+      "company": "サンプル製作所株式会社",
+      "media": "direct",
+      "start": "2026-03-12T10:00:00+09:00",
+      "end": null,
+      "allDay": false,
+      "deadline": null,
+      "choices": [],
+      "location": "オンライン",
+      "url": "https://zoom.us/j/1234567890",
+      "confidence": "high"
+    }
+  ]
+}
