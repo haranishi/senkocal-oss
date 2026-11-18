@@ -398,40 +398,44 @@ export function api_registerBulk(idsJson) {
  * 画面からは取り消せなくなる。`api_restoreCandidate` と同じ形にそろえてある。
  */
 export function api_ignoreCandidate(id) {
-  const ledger = openLedgerForApp(false);
-  const settings = ledger.readSettings();
-  const list = ledger.readCandidates();
-  const index = indexOfCandidate(list, id);
-  if (index < 0) throw new Error("候補が見つかりません: " + String(id));
-  if (list[index].status === CANDIDATE_STATUS_REGISTERED) {
-    return {
-      ok: false,
-      id: String(id),
-      reason: "登録済みの候補は「取り消す」を使ってください",
-      candidate: toClientCandidate(list[index], settings),
-    };
-  }
-  return changeCandidateStatus(id, CANDIDATE_STATUS_IGNORED, "");
+  return withRegisterLock(function () {
+    const ledger = openLedgerForApp(false);
+    const settings = ledger.readSettings();
+    const list = ledger.readCandidates();
+    const index = indexOfCandidate(list, id);
+    if (index < 0) throw new Error("候補が見つかりません: " + String(id));
+    if (list[index].status === CANDIDATE_STATUS_REGISTERED) {
+      return {
+        ok: false,
+        id: String(id),
+        reason: "登録済みの候補は「取り消す」を使ってください",
+        candidate: toClientCandidate(list[index], settings),
+      };
+    }
+    return changeCandidateStatus(id, CANDIDATE_STATUS_IGNORED, "");
+  });
 }
 
 /** ノイズ・無視から「候補」に戻す */
 export function api_restoreCandidate(id) {
-  const ledger = openLedgerForApp(false);
-  const settings = ledger.readSettings();
-  const list = ledger.readCandidates();
-  const index = indexOfCandidate(list, id);
-  if (index < 0) throw new Error("候補が見つかりません: " + String(id));
-  if (list[index].status === CANDIDATE_STATUS_REGISTERED) {
-    return {
-      ok: false,
-      id: String(id),
-      reason: "登録済みの候補は「取り消す」を使ってください",
-      candidate: toClientCandidate(list[index], settings),
-    };
-  }
-  const next = setStatus(list[index], CANDIDATE_STATUS_NEW, { note: "" });
-  ledger.upsertCandidate(next);
-  return { ok: true, id: String(id), candidate: toClientCandidate(next, settings) };
+  return withRegisterLock(function () {
+    const ledger = openLedgerForApp(false);
+    const settings = ledger.readSettings();
+    const list = ledger.readCandidates();
+    const index = indexOfCandidate(list, id);
+    if (index < 0) throw new Error("候補が見つかりません: " + String(id));
+    if (list[index].status === CANDIDATE_STATUS_REGISTERED) {
+      return {
+        ok: false,
+        id: String(id),
+        reason: "登録済みの候補は「取り消す」を使ってください",
+        candidate: toClientCandidate(list[index], settings),
+      };
+    }
+    const next = setStatus(list[index], CANDIDATE_STATUS_NEW, { note: "" });
+    ledger.upsertCandidate(next);
+    return { ok: true, id: String(id), candidate: toClientCandidate(next, settings) };
+  });
 }
 
 /**
