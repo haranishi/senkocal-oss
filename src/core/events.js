@@ -161,7 +161,7 @@ export function buildEventPlan(candidate, settings) {
   if (allDayReminders.length === 0) allDayReminders = clampReminders([SETTINGS_DEFAULTS.deadlineReminderMinutes]);
   const plan = {
     type: "timed",
-    title: titleFor(c),
+    title: c.title && String(c.title).trim() ? truncate(String(c.title).trim(), TITLE_MAX_LENGTH) : titleFor(c),
     start: null,
     end: null,
     date: null,

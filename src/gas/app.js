@@ -617,7 +617,10 @@ export function applyEdits(candidate, edits) {
     if (isFinite(startAt) && isFinite(endAt) && endAt <= startAt) next.end = null;
   }
   if (typeof source.title === "string" && source.title.trim() !== "") next.title = source.title.trim();
-  else if (companyEdited) next.title = titleFor(next);
+  else if (companyEdited ||
+    ((source.start !== undefined || source.deadline !== undefined) && candidate.title === titleFor(candidate))) {
+    next.title = titleFor(next);
+  }
   return next;
 }
 
