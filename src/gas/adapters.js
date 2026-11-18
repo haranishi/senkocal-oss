@@ -340,7 +340,11 @@ export function openLedger(spreadsheetApp, options) {
 
 /** 行でも候補オブジェクトでも受け取れるようにする */
 function asRow(value) {
-  return Array.isArray(value) ? value : toRow(value);
+  const row = Array.isArray(value) ? value : toRow(value);
+  // setValues は「=」で始まる文字列を数式として実行する。メール由来の値は文字列に固定する。
+  return row.map(function (item) {
+    return typeof item === "string" && item.charAt(0) === "=" ? "'" + item : item;
+  });
 }
 
 /** 台帳ハンドル（読み書きはすべてここを通す） */
@@ -387,7 +391,7 @@ function newLedgerHandle(book, candidatesSheet, settingsSheet, processedSheet) {
         const key = values[i] && values[i][0] !== undefined ? String(values[i][0]).trim() : "";
         if (key === HEADERS[0]) continue; // 見出し行
         if (key !== id) continue;
-        candidatesSheet.getRange(i + 1, 1, 1, HEADERS.length).setValues([toRow(c)]);
+        candidatesSheet.getRange(i + 1, 1, 1, HEADERS.length).setValues([asRow(c)]);
         return i + 1;
       }
       handle.appendCandidates([toRow(c)]);
