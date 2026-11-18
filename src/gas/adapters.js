@@ -105,24 +105,30 @@ export function listRecentMails(gmailApp, query, options) {
   const wanted = options && options.max !== undefined && options.max !== null ? Number(options.max) : NaN;
   const limit = isFinite(wanted) && wanted > 0 ? Math.floor(wanted) : SETTINGS_DEFAULTS.maxMessagesPerRun;
   const skip = skipTest(options ? options.skipIds : null);
-  const threads = gmailApp.search(String(query === null || query === undefined ? "" : query), 0, limit) || [];
-  const mails = [];
-  for (let i = 0; i < threads.length; i += 1) {
-    const messages = threads[i] && typeof threads[i].getMessages === "function" ? threads[i].getMessages() : [];
-    for (let j = 0; j < messages.length; j += 1) {
-      const message = messages[j];
-      if (skip && message && typeof message.getId === "function" && skip(String(message.getId()))) continue;
-      mails.push(mailFromMessage(message));
+  const searchQuery = String(query === null || query === undefined ? "" : query);
+  const pending = [];
+  // search の上限はスレッド数。処理済みだけのページを越えて未処理を探す。
+  for (let offset = 0; pending.length < limit; offset += limit) {
+    const threads = gmailApp.search(searchQuery, offset, limit) || [];
+    for (let i = 0; i < threads.length; i += 1) {
+      const messages = threads[i] && typeof threads[i].getMessages === "function" ? threads[i].getMessages() : [];
+      for (let j = 0; j < messages.length; j += 1) {
+        const message = messages[j];
+        if (skip && message && typeof message.getId === "function" && skip(String(message.getId()))) continue;
+        pending.push({ message: message, date: message && message.getDate ? isoFromDate(message.getDate()) : null });
+      }
     }
+    if (threads.length < limit) break;
   }
   // 新しい順（受信日時の降順）。日時が読めないものは後ろへ
-  mails.sort(function (a, b) {
+  pending.sort(function (a, b) {
     const left = a.date || "";
     const right = b.date || "";
     if (left === right) return 0;
     return left < right ? 1 : -1;
   });
-  return mails.slice(0, limit);
+  // 上限を決めてから本文を読む。長いスレッドでも本文の読み取りは limit 通まで。
+  return pending.slice(0, limit).map(function (item) { return mailFromMessage(item.message); });
 }
 
 /** GmailMessage → 素の JSON（本文はここから先へ持ち出さない） */
