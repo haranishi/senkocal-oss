@@ -208,7 +208,10 @@ export function parseMailWithMeta(mail) {
   const lines = splitLines(body);
   const options = { base: receivedAt };
   const dateTimes = dedupeDateTimes(parseDateTimes(body, options));
-  const deadlines = parseDeadlines(body, options);
+  const deadlines = parseDeadlines(body, {
+    base: receivedAt,
+    keepOccurrences: classified.kind === "es_deadline" || classified.kind === "test_deadline",
+  });
   const location = findLocation(lines);
   const url = findMeetingUrl(body);
 
@@ -249,12 +252,17 @@ export function parseMailWithMeta(mail) {
       })
     );
   } else if (classified.kind === "es_deadline" || classified.kind === "test_deadline") {
+    const seenDeadlines = {};
     for (let i = 0; i < deadlines.length; i += 1) {
       const deadline = deadlines[i];
+      const deadlineKind = kindFromLine(lines[deadline.line - 1], DEADLINE_KIND_RULES, classified.kind);
+      const key = deadlineKind + "|" + deadline.at;
+      if (seenDeadlines[key]) continue;
+      seenDeadlines[key] = true;
       candidates.push(
         buildCandidate(base, {
           // 締切ごとに、その行の語で種別を決める（重要 5）
-          kind: kindFromLine(lines[deadline.line - 1], DEADLINE_KIND_RULES, classified.kind),
+          kind: deadlineKind,
           stage: null,
           start: null,
           end: null,
