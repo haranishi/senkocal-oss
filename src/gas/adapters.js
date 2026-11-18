@@ -105,24 +105,30 @@ export function listRecentMails(gmailApp, query, options) {
   const wanted = options && options.max !== undefined && options.max !== null ? Number(options.max) : NaN;
   const limit = isFinite(wanted) && wanted > 0 ? Math.floor(wanted) : SETTINGS_DEFAULTS.maxMessagesPerRun;
   const skip = skipTest(options ? options.skipIds : null);
-  const threads = gmailApp.search(String(query === null || query === undefined ? "" : query), 0, limit) || [];
-  const mails = [];
-  for (let i = 0; i < threads.length; i += 1) {
-    const messages = threads[i] && typeof threads[i].getMessages === "function" ? threads[i].getMessages() : [];
-    for (let j = 0; j < messages.length; j += 1) {
-      const message = messages[j];
-      if (skip && message && typeof message.getId === "function" && skip(String(message.getId()))) continue;
-      mails.push(mailFromMessage(message));
+  const searchQuery = String(query === null || query === undefined ? "" : query);
+  const pending = [];
+  // search の上限はスレッド数。処理済みだけのページを越えて未処理を探す。
+  for (let offset = 0; pending.length < limit; offset += limit) {
+    const threads = gmailApp.search(searchQuery, offset, limit) || [];
+    for (let i = 0; i < threads.length; i += 1) {
+      const messages = threads[i] && typeof threads[i].getMessages === "function" ? threads[i].getMessages() : [];
+      for (let j = 0; j < messages.length; j += 1) {
+        const message = messages[j];
+        if (skip && message && typeof message.getId === "function" && skip(String(message.getId()))) continue;
+        pending.push({ message: message, date: message && message.getDate ? isoFromDate(message.getDate()) : null });
+      }
     }
+    if (threads.length < limit) break;
   }
   // 新しい順（受信日時の降順）。日時が読めないものは後ろへ
-  mails.sort(function (a, b) {
+  pending.sort(function (a, b) {
     const left = a.date || "";
     const right = b.date || "";
     if (left === right) return 0;
     return left < right ? 1 : -1;
   });
-  return mails.slice(0, limit);
+  // 上限を決めてから本文を読む。長いスレッドでも本文の読み取りは limit 通まで。
+  return pending.slice(0, limit).map(function (item) { return mailFromMessage(item.message); });
 }
 
 /** GmailMessage → 素の JSON（本文はここから先へ持ち出さない） */
@@ -174,13 +180,25 @@ export function createEventFromPlan(calendarApp, plan, options) {
     event = calendar.createEvent(String(p.title || ""), start, end, detail);
   }
   if (!event) throw new Error("予定を作れませんでした");
-  const reminders = Array.isArray(p.reminders) ? p.reminders : [];
-  for (let i = 0; i < reminders.length; i += 1) {
-    if (typeof event.addPopupReminder === "function") event.addPopupReminder(reminders[i]);
+  try {
+    const reminders = Array.isArray(p.reminders) ? p.reminders : [];
+    for (let i = 0; i < reminders.length; i += 1) {
+      if (typeof event.addPopupReminder === "function") event.addPopupReminder(reminders[i]);
+    }
+    // どの候補から作った予定かを予定側にも残す（台帳が壊れたときの手がかり）
+    if (opts.candidateId && typeof event.setTag === "function") event.setTag("senkocal", String(opts.candidateId));
+    return { eventId: String(event.getId()) };
+  } catch (err) {
+    // 作成後の設定に失敗したら、この呼び出しで作った予定だけを戻す。
+    // 台帳に ID が届かないまま残すと、再試行で二重登録になる。
+    try {
+      event.deleteEvent();
+    } catch (cleanupError) {
+      throw new Error("予定の設定と取り消しに失敗しました。再登録前にカレンダーを確認してください。予定ID: " +
+        String(event.getId()) + " / " + String(err.message || err));
+    }
+    throw err;
   }
-  // どの候補から作った予定かを予定側にも残す（台帳が壊れたときの手がかり）
-  if (opts.candidateId && typeof event.setTag === "function") event.setTag("senkocal", String(opts.candidateId));
-  return { eventId: String(event.getId()) };
 }
 
 /**
@@ -194,12 +212,8 @@ export function deleteEventById(calendarApp, eventId, options) {
   const id = eventId === null || eventId === undefined ? "" : String(eventId).trim();
   if (id === "") return false;
   const calendar = resolveCalendar(calendarApp, (options || {}).calendarId);
-  let event = null;
-  try {
-    event = calendar.getEventById(id);
-  } catch (err) {
-    event = null; // 予定が既に消えている場合も「取り消し済み」として扱う
-  }
+  // 見つからないときは null。権限・通信などの例外は呼び出し元へ返して台帳を残す。
+  const event = calendar.getEventById(id);
   if (!event) return false;
   event.deleteEvent();
   return true;
@@ -334,7 +348,12 @@ export function openLedger(spreadsheetApp, options) {
 
 /** 行でも候補オブジェクトでも受け取れるようにする */
 function asRow(value) {
-  return Array.isArray(value) ? value : toRow(value);
+  const row = Array.isArray(value) ? value : toRow(value);
+  // setValues は「=」「+」「-」「@」で始まる文字列（先頭がタブ・改行のものを含む）を数式として実行する。
+  // メール由来の値は、先頭に「'」を付けて文字列に固定する（シートに入るときに「'」は表示されない）。
+  return row.map(function (item) {
+    return typeof item === "string" && /^[=+\-@\t\r\n]/.test(item) ? "'" + item : item;
+  });
 }
 
 /** 台帳ハンドル（読み書きはすべてここを通す） */
@@ -381,7 +400,7 @@ function newLedgerHandle(book, candidatesSheet, settingsSheet, processedSheet) {
         const key = values[i] && values[i][0] !== undefined ? String(values[i][0]).trim() : "";
         if (key === HEADERS[0]) continue; // 見出し行
         if (key !== id) continue;
-        candidatesSheet.getRange(i + 1, 1, 1, HEADERS.length).setValues([toRow(c)]);
+        candidatesSheet.getRange(i + 1, 1, 1, HEADERS.length).setValues([asRow(c)]);
         return i + 1;
       }
       handle.appendCandidates([toRow(c)]);

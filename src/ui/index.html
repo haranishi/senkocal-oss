@@ -1333,6 +1333,7 @@
           var input = el("input");
           input.type = type;
           input.value = value || "";
+          input.defaultValue = input.value;
           input.setAttribute("data-role", role);
           wrap.appendChild(input);
           return wrap;
@@ -1343,10 +1344,15 @@
           form.setAttribute("data-role", "edit-form");
           form.appendChild(field("タイトル", "text", candidate.title || "", "title"));
           form.appendChild(field("企業名", "text", candidate.company || "", "company"));
-          form.appendChild(field("開始", "datetime-local", toLocalInput(candidate.start), "start"));
+          var dateOnlyStart = candidate.start && !timeOf(candidate.start);
+          form.appendChild(field("開始", dateOnlyStart ? "date" : "datetime-local",
+            dateOnlyStart ? String(candidate.start).slice(0, 10) : toLocalInput(candidate.start), "start"));
           form.appendChild(field("終了", "datetime-local", toLocalInput(candidate.end), "end"));
+          var timedDeadline = timeOf(candidate.deadline);
           form.appendChild(
-            field("締切", "date", candidate.deadline ? String(candidate.deadline).slice(0, 10) : "", "deadline")
+            field("締切", timedDeadline ? "datetime-local" : "date",
+              timedDeadline ? toLocalInput(candidate.deadline) :
+                candidate.deadline ? String(candidate.deadline).slice(0, 10) : "", "deadline")
           );
           form.appendChild(field("場所", "text", candidate.location || "", "location"));
           var submit = el("button", "btn-strong", "この内容で登録");
@@ -1513,7 +1519,8 @@
             var roles = ["title", "company", "start", "end", "deadline", "location"];
             for (var i = 0; i < roles.length; i += 1) {
               var input = form.querySelector('input[data-role="' + roles[i] + '"]');
-              if (input) edits[roles[i]] = input.value;
+              // 未変更の値は送らない。表示用の整形で元の時刻・終日情報を失わないようにする。
+              if (input && input.value !== input.defaultValue) edits[roles[i]] = input.value;
             }
           }
           // カード上の「企業名」の欄は編集フォームより後に読む（そこに書いた値を優先する）

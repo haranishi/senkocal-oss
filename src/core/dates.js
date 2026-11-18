@@ -904,7 +904,7 @@ function relativeDeadlineIn(line, baseIso) {
  * 同じ行にあればいちばん近い日時、行に日時が無ければ直後 2 行の最初の日時を採る
  * （前の行は含めない＝直前にある面接日時を締切と誤るため。FR-04）。
  * @param {string} text
- * @param {{base?: string}} [options]
+ * @param {{base?: string, keepOccurrences?: boolean}} [options] 種別判定用に別行の同時刻を残せる
  * @returns {Array<{at: string, allDay: boolean, raw: string, line: number, confidence: string}>}
  */
 export function parseDeadlines(text, options) {
@@ -922,8 +922,10 @@ export function parseDeadlines(text, options) {
   const results = [];
   const seen = {};
   const push = function (at, allDay, raw, lineNo, confidence) {
-    if (!at || seen[at]) return;
-    seen[at] = true;
+    // 同時刻でも別の行なら別の作業になりうる（ES提出とWebテストなど）。
+    const key = options && options.keepOccurrences ? lineNo + "|" + at : at;
+    if (!at || seen[key]) return;
+    seen[key] = true;
     results.push({ at: at, allDay: allDay, raw: raw, line: lineNo, confidence: confidence });
   };
 
