@@ -200,12 +200,8 @@ export function deleteEventById(calendarApp, eventId, options) {
   const id = eventId === null || eventId === undefined ? "" : String(eventId).trim();
   if (id === "") return false;
   const calendar = resolveCalendar(calendarApp, (options || {}).calendarId);
-  let event = null;
-  try {
-    event = calendar.getEventById(id);
-  } catch (err) {
-    event = null; // 予定が既に消えている場合も「取り消し済み」として扱う
-  }
+  // 見つからないときは null。権限・通信などの例外は呼び出し元へ返して台帳を残す。
+  const event = calendar.getEventById(id);
   if (!event) return false;
   event.deleteEvent();
   return true;
