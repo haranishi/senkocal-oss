@@ -349,9 +349,10 @@ export function openLedger(spreadsheetApp, options) {
 /** 行でも候補オブジェクトでも受け取れるようにする */
 function asRow(value) {
   const row = Array.isArray(value) ? value : toRow(value);
-  // setValues は「=」で始まる文字列を数式として実行する。メール由来の値は文字列に固定する。
+  // setValues は「=」「+」「-」「@」で始まる文字列（先頭がタブ・改行のものを含む）を数式として実行する。
+  // メール由来の値は、先頭に「'」を付けて文字列に固定する（シートに入るときに「'」は表示されない）。
   return row.map(function (item) {
-    return typeof item === "string" && item.charAt(0) === "=" ? "'" + item : item;
+    return typeof item === "string" && /^[=+\-@\t\r]/.test(item) ? "'" + item : item;
   });
 }
 
