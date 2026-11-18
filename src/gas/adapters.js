@@ -180,13 +180,25 @@ export function createEventFromPlan(calendarApp, plan, options) {
     event = calendar.createEvent(String(p.title || ""), start, end, detail);
   }
   if (!event) throw new Error("予定を作れませんでした");
-  const reminders = Array.isArray(p.reminders) ? p.reminders : [];
-  for (let i = 0; i < reminders.length; i += 1) {
-    if (typeof event.addPopupReminder === "function") event.addPopupReminder(reminders[i]);
+  try {
+    const reminders = Array.isArray(p.reminders) ? p.reminders : [];
+    for (let i = 0; i < reminders.length; i += 1) {
+      if (typeof event.addPopupReminder === "function") event.addPopupReminder(reminders[i]);
+    }
+    // どの候補から作った予定かを予定側にも残す（台帳が壊れたときの手がかり）
+    if (opts.candidateId && typeof event.setTag === "function") event.setTag("senkocal", String(opts.candidateId));
+    return { eventId: String(event.getId()) };
+  } catch (err) {
+    // 作成後の設定に失敗したら、この呼び出しで作った予定だけを戻す。
+    // 台帳に ID が届かないまま残すと、再試行で二重登録になる。
+    try {
+      event.deleteEvent();
+    } catch (cleanupError) {
+      throw new Error("予定の設定と取り消しに失敗しました。再登録前にカレンダーを確認してください。予定ID: " +
+        String(event.getId()) + " / " + String(err.message || err));
+    }
+    throw err;
   }
-  // どの候補から作った予定かを予定側にも残す（台帳が壊れたときの手がかり）
-  if (opts.candidateId && typeof event.setTag === "function") event.setTag("senkocal", String(opts.candidateId));
-  return { eventId: String(event.getId()) };
 }
 
 /**
