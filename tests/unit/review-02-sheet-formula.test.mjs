@@ -51,7 +51,7 @@ test("review-02: +, -, @, タブで始まる値も、文字列に固定する。
     assert.equal(bySubject["面接のご案内"][HEADERS.indexOf("場所")], "東京本社", "通常の場所は変えない");
     const ledger = openLedger(gas.spreadsheet, { properties: gas.properties.getScriptProperties() });
     const candidate = ledger.readCandidates()[0];
-    for (const [value, expected] of [["@SUM(1,1)", "'@SUM(1,1)"], ["\t=1+1", "'\t=1+1"], ["\r+1", "'\r+1"], ["1+1", "1+1"]]) {
+    for (const [value, expected] of [["@SUM(1,1)", "'@SUM(1,1)"], ["\t=1+1", "'\t=1+1"], ["\r+1", "'\r+1"], ["\n-1", "'\n-1"], ["1+1", "1+1"]]) {
       ledger.upsertCandidate({ ...candidate, title: value });
       assert.equal(sheet.rows().find((r) => r[HEADERS.indexOf("タイトル")] === expected)?.[HEADERS.indexOf("タイトル")], expected, JSON.stringify(value));
     }
